@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { firestore } from './utils/firebase'; // Import Firestore from Firebase SDK
+import { getFirestore, collection, doc, setDoc, getDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { serverTimestamp } from 'firebase/firestore';
 
 function UserDetails() {
   const [editing, setEditing] = useState(false);
@@ -10,12 +12,18 @@ function UserDetails() {
   const [address, setAddress] = useState('');
 
   useEffect(() => {
-    // Fetch user details from Firestore and populate state variables on component mount
-    const fetchUserDetails = async () => {
-      try {
-        const userId = getCurrentUserId(); // Implement this function to get the current user ID
-        const userDoc = await firestore.collection('users').doc(userId).get();
-        if (userDoc.exists) {
+    fetchUserDetails();
+  }, []); // Fetch user details on component mount
+  
+  const firestore = getFirestore(); // Get Firestore instance
+  
+  const fetchUserDetails = async () => {
+    try {
+      const userId = getCurrentUserId();
+      if (userId) {
+        const userRef = doc(collection(firestore, 'users'), userId);
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
           const userData = userDoc.data();
           setFirstName(userData.firstName || '');
           setLastName(userData.lastName || '');
@@ -23,13 +31,11 @@ function UserDetails() {
           setDob(userData.dob || '');
           setAddress(userData.address || '');
         }
-      } catch (error) {
-        console.error('Error fetching user details:', error);
       }
-    };
-
-    fetchUserDetails();
-  }, []);
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+    }
+  };
 
   const handleEditDetails = () => {
     setEditing(true);
@@ -38,23 +44,31 @@ function UserDetails() {
   const handleSaveDetails = async () => {
     try {
       const userId = getCurrentUserId(); // Implement this function to get the current user ID
-      
-      await firestore.collection('users').doc(userId).set({
-        firstName,
-        lastName,
-        email,
-        dob,
-        address,
-      });
-      setEditing(false);
+      if (userId) {
+        const userRef = doc(collection(firestore, 'users'), userId);
+        await setDoc(userRef, {
+          firstName,
+          lastName,
+          email,
+          dob,
+          address,
+          updatedAt: serverTimestamp(), // Add a timestamp for last update
+        });
+        setEditing(false);
+      }
     } catch (error) {
       console.error('Error saving user details:', error);
     }
   };
 
   const getCurrentUserId = () => {
-    // Implement this function to get the current user ID using Firebase Authentication
-    // Example: return firebase.auth().currentUser.uid;
+    const auth = getAuth();
+    if (auth.currentUser) {
+      return auth.currentUser.uid;
+    } else {
+      // Handle the case when the current user is not authenticated
+      return null;
+    }
   };
 
   return (
